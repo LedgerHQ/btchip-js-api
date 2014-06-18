@@ -1,0 +1,111 @@
+<!--
+************************************************************************
+Copyright (c) 2014 BTCHIP 
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+        http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*************************************************************************
+-->
+
+<html>
+<head>
+<script src="thirdparty/jsbn.js"></script>
+<script src="thirdparty/jsbn2.js"></script>
+
+<script src="ucrypt/JSUCrypt.js"></script>
+<script src="ucrypt/keys.js"></script>
+<script src="ucrypt/helpers.js"></script>
+<script src="ucrypt/signature.js"></script>
+<script src="ucrypt/ecfp.js"></script>
+<script src="ucrypt/ecdsa.js"></script>
+
+<script src="ucrypt/hash.js"></script>
+<script src="ucrypt/sha256.js"></script>
+
+<script src="../../thirdparty/class/inheritance.min.js"></script>
+
+<script src="../../api/require.js"></script>
+<script src="../../api/GlobalConstants.js"></script>
+<script src="../../api/Convert.js"></script>
+<script src="../../api/ByteString.js"></script>
+
+<script src="BitcoinExternal.js"></script>
+
+</head>
+<body>
+
+<script language="javascript">
+
+var convertBase64 = function(data) {
+        var codes = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+        var output = "";
+        var leven = 3 * (Math.floor(data.length / 3));
+        var offset = 0;
+        var i;
+        for (i=0; i<leven; i += 3) {
+                output += codes.charAt((data.byteAt(offset) >> 2) & 0x3f);
+                output += codes.charAt((((data.byteAt(offset) & 3) << 4) + (data.byteAt(offset + 1) >> 4)) & 0x3f);
+                output += codes.charAt((((data.byteAt(offset + 1) & 0x0f) << 2) + (data.byteAt(offset + 2) >> 6)) & 0x3f);
+                output += codes.charAt(data.byteAt(offset + 2) & 0x3f);
+                offset += 3;
+        }
+        if (i < data.length) {
+                var a = data.byteAt(offset);
+                var b = ((i + 1) < data.length ? data.byteAt(offset + 1) : 0);
+                output += codes.charAt((a >> 2) & 0x3f);
+                output += codes.charAt((((a & 3) << 4) + (b >> 4)) & 0x3f);
+                output += ((i + 1) < data.length ? codes.charAt((((b & 0x0f) << 2)) & 0x3f) : '=');
+                output += '=';
+        }
+        return output;
+}
+
+var convertMessageSignature = function(pubKey, message, signature) {
+
+	var bitcoin = new BitcoinExternal();
+
+	var hash = bitcoin.getSignedMessageHash(message);
+	pubKey = bitcoin.compressPublicKey(pubKey);
+	
+	var sig;
+
+	for (var i=0; i<4; i++) { 
+        	var recoveredKey = bitcoin.recoverPublicKey(signature, hash, i);
+               	recoveredKey = bitcoin.compressPublicKey(recoveredKey);
+        	if (recoveredKey.equals(pubKey)) {
+                	var splitSignature = bitcoin.splitAsn1Signature(signature);
+                	sig = new ByteString(Convert.toHexByte(i + 27 + 4), HEX).concat(splitSignature[0]).concat(splitSignature[1]);
+                	break;
+        	}
+	}
+
+	if (typeof sig == "undefined") {
+        	throw "Recovery failed";
+	}
+
+	return convertBase64(sig);
+}
+
+// TEST
+
+var MSG = new ByteString("bitid://bitid.bitcoin.blue/callback?x=45e564ce3407bac2&u=1", ASCII);
+
+var SIGNATURE = new ByteString("3046022100AA2AE989B2C84EE11DEBB3EDCD8AE88979EF905D75F0E79BC7DEAD6471EBF5C1022100C1483298F16E87A8BBED729BDC2FD85F8F53F0343010A12DC3BC0AD2870136B4", HEX);
+var PUBKEY = new ByteString("02AAFA74CAF3DA293E0BE93DA1CA731EB53D51F9BA10BA5CE45F2915710406C762", HEX);
+
+alert(convertMessageSignature(PUBKEY, MSG, SIGNATURE));
+
+
+</script>
+
+</body>
+

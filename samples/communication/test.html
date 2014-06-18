@@ -1,0 +1,92 @@
+<!--
+************************************************************************
+Copyright (c) 2014 BTCHIP 
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+        http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*************************************************************************
+--> 
+<html>
+<head>
+<script src="../../thirdparty/q/q.min.js"></script>
+<script src="../../thirdparty/async/async.min.js"></script>
+<script src="../../thirdparty/class/inheritance.min.js"></script>
+
+<script src="../../api/require.js"></script>
+<script src="../../api/winusbDevice.js"></script>
+<script src="../../api/GlobalConstants.js"></script>
+<script src="../../api/Convert.js"></script>
+<script src="../../api/ByteString.js"></script>
+<script src="../../api/Card.js"></script>
+<script src="../../api/CardTerminalFactory.js"></script>
+<script src="../../api/CardTerminal.js"></script>
+<script src="../../api/ChromeapiPlugupCard.js"></script>
+<script src="../../api/ChromeapiPlugupCardTerminalFactory.js"></script>
+<script src="../../api/ChromeapiPlugupCardTerminal.js"></script>
+<script src="../../api/BTChip.js"></script>
+</head>
+
+<body>
+
+<h1>BTChip communication test</h1>
+
+<button href="#" onclick="go()">Get firmware version</button>
+
+<script language="javascript">
+
+var cardFactory = new ChromeapiPlugupCardTerminalFactory();
+
+function go() {	
+
+	// If nothing happens here and you're testing locally, check that "allow access to file URLs" is checked 
+	// for Plug-up Bridge Content Script in chrome://extensions
+
+        try {
+        	cardFactory.list_async().then(function(result) {
+                	console.log("result getCard");
+                	console.log(result);
+                	if (result.length == 0) {
+				alert("No dongle found");
+                	}
+                	else {
+                        	cardFactory.getCardTerminal(result[0]).getCard_async().then(function(dongle) {
+					var app = new BTChip(dongle);
+					app.getFirmwareVersion_async().then(function(result) {
+						dongle.disconnect_async();
+						var fw = result['firmwareVersion'];
+						alert("Found dongle firmware " + fw.byteAt(1) + "." + fw.byteAt(2) + "." + fw.byteAt(3));
+					}).fail(function(exception) {
+						dongle.disconnect_async();
+						console.log("getFirmwareVersion failed on asynchronous call");
+						console.log(exeception);
+						alert("getFirmwareVersion failed");
+					});
+				});
+			}
+        	}).fail(function(exception) {
+			console.log("getCard fail on asynchronous call");
+			console.log(exception);
+			alert("getCard failed");
+		});
+        }
+        catch(e) {
+                console.log("getCard fail on earliest call");
+                console.log(e);
+		alert("Main failed");
+        }
+}
+</script>
+
+</body>
+
+</html>
+
