@@ -3,7 +3,10 @@ btchip-js-api
 
 BTChip JavaScript APIs
 
-Only available for Chrome / Chromium browsers with https://chrome.google.com/webstore/detail/plug-up-bridge/mgbemnbocfpecccpecgommbeilnainej and https://chrome.google.com/webstore/detail/plug-up-bridge-content-sc/icnekhdkfglaecpcdkjoahlnjllocjgo preloaded
+Only available for Chrome / Chromium browsers with the following extensions installed : 
+
+  * Plug-up Bridge https://chrome.google.com/webstore/detail/plug-up-bridge/mgbemnbocfpecccpecgommbeilnainej
+  * Plug-up Content Script https://chrome.google.com/webstore/detail/plug-up-bridge-content-sc/icnekhdkfglaecpcdkjoahlnjllocjgo 
 
 Using :
 
