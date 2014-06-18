@@ -7,8 +7,8 @@ Only available for Chrome / Chromium browsers with https://chrome.google.com/web
 
 Using :
 
-	* PlugupExtension from https://github.com/ubinity/PlugupExtension
-	* Q from https://github.com/kriskowal/q
-	* async.js from https://github.com/caolan/async
-	* inheritance from https://code.google.com/p/inheritance/
+  * PlugupExtension from https://github.com/ubinity/PlugupExtension
+  * Q from https://github.com/kriskowal/q
+  * async.js from https://github.com/caolan/async
+  * inheritance from https://code.google.com/p/inheritance/
 
