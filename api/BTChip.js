@@ -39,16 +39,42 @@ var BTChip = Class.create({
 
 	setDeprecatedFirmwareVersion : function() {
 		this.deprecatedFirmwareVersion = true;
+		this.deprecatedBIP32Derivation = true;
 	},
 
-	_almostConvertU32 : function(number) {
+	setDeprecatedBIP32Derivation : function() {
+		this.deprecatedBIP32Derivation = true;
+	},
+
+	setDeprecatedSetupKeymap : function() {
+		this.deprecatedSetupKeymap = true;
+	},
+
+	_almostConvertU32 : function(number, hdFlag) {
 		if (number instanceof ByteString) {
 			return number;
 		}
-		return new ByteString(Convert.toHexByte((number >> 24) & 0xff) + Convert.toHexByte((number >> 16) & 0xff) + Convert.toHexByte((number >> 8) & 0xff) + Convert.toHexByte(number & 0xff), HEX);
+		return new ByteString(Convert.toHexByte(((number >> 24) & 0xff) | (hdFlag ? 0x80 : 0x00)) + Convert.toHexByte((number >> 16) & 0xff) + Convert.toHexByte((number >> 8) & 0xff) + Convert.toHexByte(number & 0xff), HEX);
 	},
 
+	parseBIP32Path : function(path) {
+        var result = [];
+        var components = path.split("/");
+        for (var i=0; i<components.length; i++) {
+                var hdFlag = 0;
+                var component = components[i];
+                if (component.charAt(component.length - 1) == '\'') {
+                        hdFlag = 1;
+                        component = component.substring(0, component.length - 1);
+                }
+                result.push(this._almostConvertU32(component, hdFlag));
+        }
+        return result;
+	},	
+
 	setupNew_async: function(modeMask, featuresMask, version, versionP2sh, pin, wipePin, keymapEncoding, restoreSeed, bip32SeedOrEntropy, wrappingKey) {
+		var deprecatedSetupKeymap = this.deprecatedSetupKeymap				
+		var dongle = this;
 		if (typeof modeMask == "undefined") {
 			modeMask = BTChip.MODE_WALLET;
 		}
@@ -72,18 +98,32 @@ var BTChip = Class.create({
 		else {
 			data += Convert.toHexByte(wipePin.length) + wipePin.toString(HEX);
 		}
-		data += keymapEncoding.toString(HEX);
-		data += Convert.toHexByte(restoreSeed ? 0x01 : 0x00);
-		if (typeof bip32SeedOrEntropy == "undefined") {
-			for (var i=0; i<32; i++) {	
-				data += "00";
+		if (this.deprecatedSetupKeymap) {
+			data += keymapEncoding.toString(HEX);
+			data += Convert.toHexByte(restoreSeed ? 0x01 : 0x00);
+			if (typeof bip32SeedOrEntropy == "undefined") {
+				for (var i=0; i<32; i++) {	
+					data += "00";
+				}
+			}
+			else {
+				if (bip32SeedOrEntropy.length != 32) {
+					throw "Invalid seed length";
+				}
+				data += bip32SeedOrEntropy.toString(HEX);
 			}
 		}
 		else {
-			if (bip32SeedOrEntropy.length != 32) {
-				throw "Invalid seed length";
+			if (restoreSeed) {
+				if ((bip32SeedOrEntropy.length < 32) || (bip32SeedOrEntropy.length > 64)) {
+					throw "Invalid seed length";
+				}
+				data += Convert.toHexByte(bip32SeedOrEntropy.length);
+				data += bip32SeedOrEntropy.toString(HEX);
 			}
-			data += bip32SeedOrEntropy.toString(HEX);
+			else {
+				data += "00";
+			}
 		}
 		if (typeof wrappingKey == "undefined") {
 			data += "00";
@@ -98,7 +138,14 @@ var BTChip = Class.create({
 				  resultList['trustedInputKey'] = result.bytes(offset, 16);
 				  offset += 16;
 				  resultList['keyWrappingKey'] = result.bytes(offset, 16);
-				  return resultList;
+				  if (deprecatedSetupKeymap) {
+				  	return resultList;
+				  }
+				  else {
+				  	return dongle.card.sendApdu_async(0xe0, 0x28, 0x00, 0x00, keymapEncoding, [0x9000]).then(function(result) {
+				  		return resultList;
+				  	});
+				  }
         });
 	},	
 
@@ -184,12 +231,29 @@ var BTChip = Class.create({
 		});
 	},
 
-	getWalletPublicKey_async : function(account, chainIndex, internalChain) {
-		if (typeof account == "undefined") {
-			account = 0;
+	getWalletPublicKey_async : function(path) {
+		var data;
+		var path = this.parseBIP32Path(path);
+		var p1;
+		if (this.deprecatedBIP32Derivation) {
+			var account, chainIndex, internalChain;			
+			if (path.length != 3) {
+				throw "Invalid BIP 32 path for deprecated BIP32 derivation";
+			}
+			account = path[0];
+			internalChain = (path[1].equals(new ByteString("00000001", HEX)));
+			chainIndex = path[2];
+			data = account.concat(chainIndex);
+			p1 = (internalChain ? BTChip.INTERNAL_CHAIN : BTChip.EXTERNAL_CHAIN);
 		}
-		var data = this._almostConvertU32(account).concat(this._almostConvertU32(chainIndex));
-		return this.card.sendApdu_async(0xe0, 0x40, (internalChain ? BTChip.INTERNAL_CHAIN : BTChip.EXTERNAL_CHAIN), 0x00, data, [0x9000]).then(function (result) {
+		else {
+			data = new ByteString(Convert.toHexByte(path.length), HEX);
+			for (var i=0; i<path.length; i++) {
+				data = data.concat(path[i]);
+			}
+			p1 = 0x00;
+		}
+		return this.card.sendApdu_async(0xe0, 0x40, p1, 0x00, data, [0x9000]).then(function (result) {
                   var resultList = {};
                   var offset = 0;
                   resultList['publicKey'] = result.bytes(offset + 1, result.byteAt(offset));
@@ -199,9 +263,26 @@ var BTChip = Class.create({
                 });
 	},
 
-	signMessagePrepare_async : function(account, chainIndex, internalChain, message) {
-		var data = this._almostConvertU32(account).concat(this._almostConvertU32(chainIndex));
-		data = data.concat(new ByteString(Convert.toHexByte((internalChain ? BTChip.INTERNAL_CHAIN : BTChip.EXTERNAL_CHAIN)), HEX));
+	signMessagePrepare_async : function(path, message) {
+		var data;
+		var path = this.parseBIP32Path(path);
+		if (this.deprecatedBIP32Derivation) {
+			var account, chainIndex, internalChain;			
+			if (path.length != 3) {
+				throw "Invalid BIP 32 path for deprecated BIP32 derivation";
+			}
+			account = path[0];
+			internalChain = (path[1].equals(new ByteString("00000001", HEX)));
+			chainIndex = path[2];
+			data = account.concat(chainIndex);
+			data = data.concat(new ByteString(Convert.toHexByte(internalChain ? BTChip.INTERNAL_CHAIN : BTChip.EXTERNAL_CHAIN)), HEX);
+		}
+		else {
+			data = new ByteString(Convert.toHexByte(path.length), HEX);
+			for (var i=0; i<path.length; i++) {
+				data = data.concat(path[i]);
+			}
+		}		
 		data = data.concat(new ByteString(Convert.toHexByte(message.length), HEX));
 		data = data.concat(message);
 		return this.card.sendApdu_async(0xe0, 0x4e, 0x00, 0x00, data);
@@ -255,23 +336,51 @@ var BTChip = Class.create({
 	getTrustedInput_async: function(indexLookup, transaction) {
           var currentObject = this;
           var deferred = Q.defer();
-          var data = transaction['version'].concat(currentObject.createVarint(transaction['inputs'].length));
-          currentObject.getTrustedInputRaw_async(true, indexLookup, data).then(function (result) {
+          var processScriptBlocks = function(script) {          	
+          	  var internalPromise = Q.defer();
+          	  var scriptBlocks = [];
+          	  var offset = 0;
+          	  while (offset != script.length) {
+          	  	var blockSize = (script.length - offset > 255 ? 255 : script.length - offset);
+          	  	scriptBlocks.push(script.bytes(offset, blockSize));
+          	  	offset += blockSize;
+          	  }
+          	  async.eachSeries(
+          	  	scriptBlocks,
+          	  	function(scriptBlock, finishedCallback) {
+	                currentObject.getTrustedInputRaw_async(false, undefined, scriptBlock).then(function (result) {
+    	              finishedCallback();
+        	        }).fail(function (err) { internalPromise.reject(err); });
+          	  	},
+          	  	function(finished) {          	  		
+          	  		internalPromise.resolve();
+          	  	}
+          	  );
+          	  return internalPromise.promise;
+          }
+          var processInputs = function() {
             async.eachSeries(
               transaction['inputs'], 
               function (input, finishedCallback) {
-                data = input['prevout'].concat(currentObject.createVarint(input['script'].length));
-                data = data.concat(input['script']).concat(input['sequence']);
+                data = input['prevout'].concat(currentObject.createVarint(input['script'].length));                
                 currentObject.getTrustedInputRaw_async(false, undefined, data).then(function (result) {
                   // iteration (eachSeries) ended
                   // TODO notify progress
                   // deferred.notify("input");
-                  finishedCallback();
+                  processScriptBlocks(input['script'].concat(input['sequence'])).then(function (result) {  	
+                		finishedCallback();
+                	}).fail(function(err) { deferred.reject(err); });
                 }).fail(function (err) { deferred.reject(err); });
               },
               function(finished) {
                 data = currentObject.createVarint(transaction['outputs'].length);
                 currentObject.getTrustedInputRaw_async(false, undefined, data).then(function (result) {
+                	processOutputs();
+                }).fail(function (err) { deferred.reject(err); });
+              }
+            );          	
+          }
+          var processOutputs = function() {
                   async.eachSeries(
                     transaction['outputs'],
                     function(output, finishedCallback) {
@@ -290,10 +399,11 @@ var BTChip = Class.create({
                         deferred.resolve(result);
                       }).fail(function (err) { deferred.reject(err); });
                     }
-                  );
-                }).fail(function (err) { deferred.reject(err); });
-              }
-            );
+                  );          	
+          }
+          var data = transaction['version'].concat(currentObject.createVarint(transaction['inputs'].length));
+          currentObject.getTrustedInputRaw_async(true, indexLookup, data).then(function (result) {
+          	 processInputs();
           }).fail(function (err) { deferred.reject(err); });
           // return the promise to be resolve when the trusted input has been processed completely
           return deferred.promise;
@@ -333,20 +443,36 @@ var BTChip = Class.create({
                 return deferred.promise;
 	},
 
-	hashOutputInternal_async: function(outputType, account, chainIndex, internalChain, outputAddress, amount, fees) {
+	hashOutputInternal_async: function(outputType, path, outputAddress, amount, fees) {
 		if (typeof changeKey == "undefined") {
 			changeKey = new ByteString("", HEX);
 		}
+		var p2;
 		var data = new ByteString(Convert.toHexByte(outputAddress.length), HEX);
 		data = data.concat(outputAddress);
 		data = data.concat(amount).concat(fees);
-		data = data.concat(this._almostConvertU32(account).concat(this._almostConvertU32(chainIndex)));
+		var path = this.parseBIP32Path(path);
+		if (this.deprecatedBIP32Derivation) {
+			var account, chainIndex, internalChain;			
+			if (path.length != 3) {
+				throw "Invalid BIP 32 path for deprecated BIP32 derivation";
+			}
+			account = path[0];
+			internalChain = (path[1].equals(new ByteString("00000001", HEX)));
+			chainIndex = path[2];
+			data = data.concat(account).concat(chainIndex);
+			p2 = (internalChain ? BTChip.INTERNAL_CHAIN : BTChip.EXTERNAL_CHAIN);
+		}
+		else {
+			data = data.concat(new ByteString(Convert.toHexByte(path.length), HEX));
+			for (var i=0; i<path.length; i++) {
+				data = data.concat(path[i]);
+			}
+			p2 = 0x00;
+		}				
 		var p2;
 		if (this.deprecatedFirmwareVersion) {
 			p2 = 0x00;
-		}
-		else {
-			p2 = (internalChain ? BTChip.INTERNAL_CHAIN : BTChip.EXTERNAL_CHAIN);
 		}
 		return this.card.sendApdu_async(0xe0, 0x46, outputType, p2, data, [0x9000]).then(function (outData) {
                   var result = {};
@@ -357,15 +483,15 @@ var BTChip = Class.create({
                 });
 	}, 
 
-	hashOutputBinary_async: function(account, chainIndex, internalChain, outputAddress, amount, fees) {
-		return this.hashOutputInternal_async(0x01, account, chainIndex, internalChain, outputAddress, amount, fees);
+	hashOutputBinary_async: function(path, outputAddress, amount, fees) {
+		return this.hashOutputInternal_async(0x01, path, outputAddress, amount, fees);
 	},
 
-	hashOutputBase58_async: function(account, chainIndex, internalChain, outputAddress, amount, fees) {
-		return this.hashOutputInternal_async(0x02, account, chainIndex, internalChain, outputAddress, amount, fees);
+	hashOutputBase58_async: function(path, outputAddress, amount, fees) {
+		return this.hashOutputInternal_async(0x02, path, outputAddress, amount, fees);
 	},
 
-	signTransaction_async: function(account, chainIndex, internalChain, transactionAuthorization, lockTime, sigHashType) {
+	signTransaction_async: function(path, transactionAuthorization, lockTime, sigHashType) {
 		if (typeof transactionAuthorization == "undefined") {
 			transactionAuthorization = new ByteString("", HEX);
 		}
@@ -375,12 +501,24 @@ var BTChip = Class.create({
 		if (typeof sigHashType == "undefined") {
 			sigHashType = BTChip.SIGHASH_ALL;
 		}
-		var data = this._almostConvertU32(account).concat(this._almostConvertU32(chainIndex));
-		if (internalChain) {
-			data = data.concat(new ByteString(Convert.toHexByte(BTChip.INTERNAL_CHAIN), HEX));
+		var data;
+		var path = this.parseBIP32Path(path);
+		if (this.deprecatedBIP32Derivation) {
+			var account, chainIndex, internalChain;			
+			if (path.length != 3) {
+				throw "Invalid BIP 32 path for deprecated BIP32 derivation";
+			}
+			account = path[0];
+			internalChain = (path[1].equals(new ByteString("00000001", HEX)));
+			chainIndex = path[2];
+			data = account.concat(chainIndex);
+			data = data.concat(new ByteString((Convert.toHexByte(internalChain ? BTChip.INTERNAL_CHAIN : BTChip.EXTERNAL_CHAIN)), HEX));
 		}
 		else {
-			data = data.concat(new ByteString(Convert.toHexByte(BTChip.EXTERNAL_CHAIN), HEX));
+			data = new ByteString(Convert.toHexByte(path.length), HEX);
+			for (var i=0; i<path.length; i++) {
+				data = data.concat(path[i]);
+			}
 		}
 		data = data.concat(new ByteString(Convert.toHexByte(transactionAuthorization.length), HEX));
 		data = data.concat(transactionAuthorization);
@@ -400,9 +538,9 @@ var BTChip = Class.create({
 		return new ByteString(Convert.toHexByte(prefix), HEX).concat(publicKey.bytes(1, 32));
 	},
 
-	createPaymentTransaction_async: function(inputs, associatedKeysets, changeAccount, changeIndex, changeInternalChain, outputAddress, amount, fees, lockTime, sighashType, authorization, resumeData) {
+	createPaymentTransaction_async: function(inputs, associatedKeysets, changePath, outputAddress, amount, fees, lockTime, sighashType, authorization, resumeData) {
 		// Inputs are provided as arrays of [transaction, output_index]
-		// associatedKeysets are provided as arrays of [account, chainIndex, internalChain]
+		// associatedKeysets are provided as arrays of [path]
 		var defaultVersion = new ByteString("01000000", HEX);
 		var defaultSequence = new ByteString("FFFFFFFF", HEX);
 		var trustedInputs = [];
@@ -412,7 +550,7 @@ var BTChip = Class.create({
 		var scriptData;
 		var resuming = (typeof authorization != "undefined");
         var currentObject = this;
-		
+
 		if (typeof lockTime == "undefined") {
                   lockTime = BTChip.DEFAULT_LOCKTIME;
 		}
@@ -466,7 +604,7 @@ var BTChip = Class.create({
                           targetTransaction['inputs'][i]['script'] = regularOutputs[i]['script'];			
                           var resultHash;			
                           currentObject.startUntrustedHashTransactionInput_async(firstRun, targetTransaction, trustedInputs).then(function(result) {;
-                            currentObject.hashOutputBase58_async(changeAccount, changeIndex, changeInternalChain, outputAddress, amount, fees).then(function (resultHash) {
+                            currentObject.hashOutputBase58_async(changePath, outputAddress, amount, fees).then(function (resultHash) {
                               if (resultHash['scriptData'].length != 0) {
                                       scriptData = resultHash['scriptData'];
                               }
@@ -485,7 +623,7 @@ var BTChip = Class.create({
                                       // return current state
                                       deferred.resolve(resumeData);
                               }
-                              currentObject.signTransaction_async(associatedKeysets[i][0], associatedKeysets[i][1], associatedKeysets[i][2], authorization, lockTime, sigHashType).then(function(result) {
+                              currentObject.signTransaction_async(associatedKeysets[i], authorization, lockTime, sigHashType).then(function(result) {
                                 signatures.push(result);
                                 targetTransaction['inputs'][i]['script'] = new ByteString("", HEX);			
                                 if (firstRun) {
@@ -533,7 +671,7 @@ var BTChip = Class.create({
                       async.eachSeries(
                         inputs,
                         function(input, finishedCallback) {
-                          currentObject.getWalletPublicKey_async(associatedKeysets[i][0], associatedKeysets[i][1], associatedKeysets[i][2]).then(function(result) {
+                          currentObject.getWalletPublicKey_async(associatedKeysets[i]).then(function(result) {
 							if (currentObject.compressedPublicKeys) {                          	
 	                            publicKeysArray[i] = currentObject.compressPublicKey(result['publicKey']);
 	                        }
