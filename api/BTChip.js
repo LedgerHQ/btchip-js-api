@@ -290,23 +290,30 @@ var BTChip = Class.create({
 
 	signMessageSign_async : function(pin) {
 		var data;
+		var signature;
+		var result = {};
 		if (typeof pin != "undefined") {
 			data = pin;
 		}
 		else {
 			data = new ByteString("", HEX);
 		}
-		return this.card.sendApdu_async(0xe0, 0x4e, 0x80, 0x00, data);
+		signature = this.card.sendApdu_async(0xe0, 0x4e, 0x80, 0x00, data);
+		result['signature'] = new ByteString("30", HEX).concat(signature.bytes(1));
+		result['parity'] = (signature.byteAt(0) & 0x01);
+		return result;
 	},
 
 	ecdsaSignImmediate_async : function(privateKeyEncryptionVersion, encryptedPrivateKey, hash) {
 		var data = "";
+		var signature;
 		data = data + Convert.toHexByte(privateKeyEncryptionVersion);
 		data = data + Convert.toHexByte(encryptedPrivateKey.length);
 		data = new ByteString(data, HEX);
 		data = data.concat(encryptedPrivateKey);
 		data = data.concat(hash);
-		return this.card.sendApdu_async(0xe0, 0x40, 0x00, 0x00, data, [0x9000]);
+		signature = this.card.sendApdu_async(0xe0, 0x40, 0x00, 0x00, data, [0x9000]);
+		return new ByteString("30", HEX).concat(signature.bytes(1));
 	},
 
 	ecdsaVerifyImmediate_async : function(publicKey, hash, signature, curveFid) {
@@ -492,6 +499,7 @@ var BTChip = Class.create({
 	},
 
 	signTransaction_async: function(path, transactionAuthorization, lockTime, sigHashType) {
+		var signature;
 		if (typeof transactionAuthorization == "undefined") {
 			transactionAuthorization = new ByteString("", HEX);
 		}
@@ -524,7 +532,8 @@ var BTChip = Class.create({
 		data = data.concat(transactionAuthorization);
 		data = data.concat(lockTime);
 		data = data.concat(new ByteString(Convert.toHexByte(sigHashType), HEX));
-		return this.card.sendApdu_async(0xe0, 0x48, 0x00, 0x00, data, [0x9000]);
+		signature = this.card.sendApdu_async(0xe0, 0x48, 0x00, 0x00, data, [0x9000]);
+		return new ByteString("30", HEX).concat(signature.bytes(1));
 	},
 
 	createInputScript: function(publicKey, signatureWithHashtype) {
