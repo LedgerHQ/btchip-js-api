@@ -1,6 +1,6 @@
 /*
 ************************************************************************
-Copyright (c) 2013 UBINITY SAS
+Copyright (c) 2013-2014 UBINITY SAS
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -16,14 +16,14 @@ limitations under the License.
 *************************************************************************
 */
 
-if (typeof winusbDevice == "undefined") {
+if (typeof bridgedDevice == "undefined") {
 
-var winusbDevice = function(enumeratedDevice) {
+var bridgedDevice = function(enumeratedDevice) {
 	this.device = enumeratedDevice;
 }
 
-winusbDevice.prototype.open_async = function() {
-  var id = winusbDevice.addCallback();
+bridgedDevice.prototype.open_async = function() {
+  var id = bridgedDevice.addCallback();
   var currentDevice = this;
   window.postMessage({ 
         destination: "PUP_EXT",
@@ -33,13 +33,13 @@ winusbDevice.prototype.open_async = function() {
             device: this.device
         }
    }, "*");   
-  return winusbDevice.callbacks[id].promise.then(function(result) {
+  return bridgedDevice.callbacks[id].promise.then(function(result) {
     currentDevice.id = result.deviceId;
   });
 }
 
-winusbDevice.prototype.send_async = function(data) {
-  var id = winusbDevice.addCallback();
+bridgedDevice.prototype.send_async = function(data) {
+  var id = bridgedDevice.addCallback();
   window.postMessage({ 
         destination: "PUP_EXT",
         command: "SEND",
@@ -49,11 +49,11 @@ winusbDevice.prototype.send_async = function(data) {
             data: data
         }
    }, "*");   
-  return winusbDevice.callbacks[id].promise;
+  return bridgedDevice.callbacks[id].promise;
 }
 
-winusbDevice.prototype.recv_async = function(size) {
-  var id = winusbDevice.addCallback();
+bridgedDevice.prototype.recv_async = function(size) {
+  var id = bridgedDevice.addCallback();
   window.postMessage({ 
         destination: "PUP_EXT",
         command: "RECV",
@@ -63,11 +63,11 @@ winusbDevice.prototype.recv_async = function(size) {
             size: size
         }
    }, "*");   
-  return winusbDevice.callbacks[id].promise;
+  return bridgedDevice.callbacks[id].promise;
 }
 
-winusbDevice.prototype.close_async = function() {
-  var id = winusbDevice.addCallback();
+bridgedDevice.prototype.close_async = function() {
+  var id = bridgedDevice.addCallback();
   window.postMessage({ 
         destination: "PUP_EXT",
         command: "CLOSE",
@@ -76,38 +76,42 @@ winusbDevice.prototype.close_async = function() {
             deviceId: this.id
         }
    }, "*");   
-  return winusbDevice.callbacks[id].promise;
+  return bridgedDevice.callbacks[id].promise;
 }
 
 
-winusbDevice.addCallback = function() {
+bridgedDevice.addCallback = function() {
   var deferred = Q.defer();
-  var currentId = winusbDevice.id++;
-  winusbDevice.callbacks[currentId] = deferred;
+  var currentId = bridgedDevice.id++;
+  bridgedDevice.callbacks[currentId] = deferred;
   return currentId;
 }
 
-winusbDevice.enumerateDongles_async = function() {
-  var id = winusbDevice.addCallback();
+bridgedDevice.enumerateDongles_async = function(pid, usagePage) {
+  if (typeof pid == "undefined") {
+    pid = 0x1b7c;
+  }
+  var id = bridgedDevice.addCallback();
   window.postMessage({ 
         destination: "PUP_EXT",
         command: "ENUMERATE",
         id: id,
         parameters: {
             vid: 0x2581,
-            pid: 0x1b7c
+            pid: pid,
+            usagePage: usagePage
         }
    }, "*");
-   return winusbDevice.callbacks[id].promise;  
+   return bridgedDevice.callbacks[id].promise;  
 }
 
-winusbDevice.callbacks = {};
-winusbDevice.id = 0;
+bridgedDevice.callbacks = {};
+bridgedDevice.id = 0;
 
 window.addEventListener("message", function(event) {
   if (event.data.destination == "PUP_APP") {
-    var promise = winusbDevice.callbacks[event.data.id];
-    delete winusbDevice.callbacks[event.data.id];
+    var promise = bridgedDevice.callbacks[event.data.id];
+    delete bridgedDevice.callbacks[event.data.id];
     if (typeof event.data.response.exception != "undefined") {
       promise.reject(event.data.response.exception);
     }

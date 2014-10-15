@@ -1,6 +1,6 @@
 /*
 ************************************************************************
-Copyright (c) 2013 UBINITY SAS
+Copyright (c) 2013-2014 UBINITY SAS
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -44,9 +44,7 @@ var ChromeapiPlugupCardTerminal = Class.extend(CardTerminal, {
 			this.cardInstance = new ChromeapiPlugupCard(this, this.device);
 			return this.cardInstance.connect_async();
 		}
-		// compat if the card instance has already been retrieved 
 		var currentObject = this;
-                // promisising of the return value
 		return Q.fcall(function() {
 			return currentObject.cardInstance;
 		});

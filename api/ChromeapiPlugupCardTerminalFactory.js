@@ -1,6 +1,6 @@
 /*
 ************************************************************************
-Copyright (c) 2013 UBINITY SAS
+Copyright (c) 2013-2014 UBINITY SAS
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -27,14 +27,16 @@ var ChromeapiPlugupCardTerminalFactory = Class.extend(CardTerminalFactory, {
 	 *  @constructs
 	 *  @augments CardTerminalFactory
 	 */				
-	initialize: function() {
+	initialize: function(pid, usagePage) {
+		this.pid = pid;
+		this.usagePage = usagePage;
 	},
 	
-	list_async: function() {
-		if (typeof winusbDevice == "undefined") {
+	list_async: function(pid, usagePage) {
+		if (typeof bridgedDevice == "undefined") {
 			throw "Content script is not available";
 		}
-		return winusbDevice.enumerateDongles_async()
+		return bridgedDevice.enumerateDongles_async(this.pid, this.usagePage)
 		       .then(function(result) {
 		       		return result.deviceList;
 		       });

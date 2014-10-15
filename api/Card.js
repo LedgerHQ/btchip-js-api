@@ -1,6 +1,6 @@
 /*
 ************************************************************************
-Copyright (c) 2012 UBINITY SAS
+Copyright (c) 2012-2014 UBINITY SAS
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -270,7 +270,7 @@ var Card = Class.create({
 			promise = wrapScript.exchangeWrapped_async(apduByteString, le);
 		}
     //console.log(this.response.toString(HEX) + Convert.toHexShort(this.SW));
-                return promise.then(function(response) {
+        return promise.then(function(response) {
 			if (swCheck) {
 				for (var i=0; i<swCheck.length; i++) {
 					if (typeof swCheck[i] == "number") {
