@@ -22,7 +22,7 @@ limitations under the License.
 <script src="../../thirdparty/class/inheritance.min.js"></script>
 
 <script src="../../api/require.js"></script>
-<script src="../../api/winusbDevice.js"></script>
+<script src="../../api/bridgedDevice.js"></script>
 <script src="../../api/GlobalConstants.js"></script>
 <script src="../../api/Convert.js"></script>
 <script src="../../api/ByteString.js"></script>
@@ -43,7 +43,7 @@ limitations under the License.
 
 <script language="javascript">
 
-var cardFactory = new ChromeapiPlugupCardTerminalFactory();
+var cardFactory = new ChromeapiPlugupCardTerminalFactory(0x2b7c);
 
 function go() {	
 
