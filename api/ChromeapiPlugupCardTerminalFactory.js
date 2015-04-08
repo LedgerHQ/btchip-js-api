@@ -27,9 +27,10 @@ var ChromeapiPlugupCardTerminalFactory = Class.extend(CardTerminalFactory, {
 	 *  @constructs
 	 *  @augments CardTerminalFactory
 	 */				
-	initialize: function(pid, usagePage) {
+	initialize: function(pid, usagePage, ledgerTransport) {
 		this.pid = pid;
 		this.usagePage = usagePage;
+		this.ledgerTransport = ledgerTransport;
 	},
 	
 	list_async: function(pid, usagePage) {
@@ -47,6 +48,6 @@ var ChromeapiPlugupCardTerminalFactory = Class.extend(CardTerminalFactory, {
 	},
 
 	getCardTerminal: function(device) {
-		return new ChromeapiPlugupCardTerminal(device);
+		return new ChromeapiPlugupCardTerminal(device, undefined, this.ledgerTransport);
 	}
 });

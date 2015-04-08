@@ -30,9 +30,10 @@ var ChromeapiPlugupCardTerminal = Class.extend(CardTerminal, {
 	 *  @constructs
 	 *  @augments CardTerminal
 	 */	
-	initialize: function(device, terminalName) {
+	initialize: function(device, terminalName, ledgerTransport) {
 		this.device = device;
 		this.terminalName = terminalName;
+		this.ledgerTransport = ledgerTransport;
 	},
 	
 	isCardPresent:function() {
@@ -41,7 +42,7 @@ var ChromeapiPlugupCardTerminal = Class.extend(CardTerminal, {
 	
 	getCard_async:function() {
 		if (typeof this.cardInstance == "undefined") {
-			this.cardInstance = new ChromeapiPlugupCard(this, this.device);
+			this.cardInstance = new ChromeapiPlugupCard(this, this.device, this.ledgerTransport);
 			return this.cardInstance.connect_async();
 		}
 		var currentObject = this;
