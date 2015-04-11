@@ -1,0 +1,125 @@
+<!--
+************************************************************************
+Copyright (c) 2014 BTCHIP 
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+        http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*************************************************************************
+-->
+
+<html>
+<head>
+<script src="thirdparty/zepto.min.js"></script>
+<script src="ucrypt/JSUCrypt.js"></script>
+<script src="ucrypt/keys.js"></script>
+<script src="ucrypt/helpers.js"></script>
+<script src="ucrypt/cipher.js"></script>
+<script src="ucrypt/des.js"></script>
+<script src="ucrypt/pad.js"></script>
+
+<script src="../../thirdparty/class/inheritance.min.js"></script>
+
+<script src="../../api/require.js"></script>
+<script src="../../api/GlobalConstants.js"></script>
+<script src="../../api/Convert.js"></script>
+<script src="../../api/ByteString.js"></script>
+
+
+</head>
+<body>
+
+<script language="javascript">
+
+var getKeycardData = function(keycardKey) {
+	var tmp = "";
+	for (var i=0; i<0x50; i++) {
+     		tmp += Convert.toHexByte(i);
+	}
+	tmp = new ByteString(tmp, HEX);
+        var cipher = new JSUCrypt.cipher.DES(JSUCrypt.padder.None, JSUCrypt.cipher.MODE_CBC);
+        cipher.init(new JSUCrypt.key.DESKey(keycardKey.toString(HEX)), JSUCrypt.cipher.MODE_ENCRYPT);
+	var keycardData = new ByteString(JSUCrypt.utils.byteArrayToHexStr(cipher.finalize(tmp.toString(HEX))), HEX);	
+	tmp = "";
+	for (var i=0; i<0x50; i++) {
+     		tmp += Convert.toHexByte(((keycardData.byteAt(i) >> 4) & 0x0f) ^ (keycardData.byteAt(i) & 0x0f));
+	}
+	keycardData = new ByteString(tmp, HEX);
+	return keycardData;
+}
+
+var genKey = function() {
+	var tmp = "";
+	if (typeof window.crypto == "undefined") {
+		alert("Secure random API not available");
+		return;
+	}
+	var array = new Uint8Array(16);
+	window.crypto.getRandomValues(array);
+	for (var i=0; i<array.length; i++) {
+		tmp += Convert.toHexByte(array[i]);
+	}
+	tmp = new ByteString(tmp, HEX);
+	$("#key").val(tmp.toString(HEX));	
+}
+
+var genKeycard = function() {
+	var KEYCARD_1 = new ByteString("ABCDEFGHJKLMNPQRSTUVWXYZ", ASCII);
+	var KEYCARD_2 = new ByteString("abcdefghijkmnopqrstuvwxyz", ASCII);
+	var KEYCARD_3 = new ByteString("0123456789", ASCII);
+	var KEYCARD_CONTENT = [ KEYCARD_1, KEYCARD_2, KEYCARD_3 ];
+	var key = $("#key").val();
+	if (key.length != 32) {
+		alert("Invalid key");
+		return;
+	}
+	try {
+		key = new ByteString(key, HEX);
+	}
+	catch(e) {
+		alert("Invalid key");
+		return;
+	}
+	var keycardData = getKeycardData(key);
+	var data = "";
+	for (var i=0; i<KEYCARD_CONTENT.length; i++) {
+		data += "<table border='1'><tr>";
+		for (var j=0; j<KEYCARD_CONTENT[i].length; j++) {
+			data += "<td><b>" + KEYCARD_CONTENT[i].bytes(j, 1).toString(ASCII) + "<b></td>";
+		}
+		data += "</tr><tr>";
+		for (var j=0; j<KEYCARD_CONTENT[i].length; j++) {
+			data += "<td>" + keycardData.bytes(KEYCARD_CONTENT[i].byteAt(j) - 0x30, 1).toString(HEX).substring(1) + "</td>";
+		}
+		data += "</tr></table>";
+		data += "<br>";
+	}
+	$("#keycardData").html(data);
+}
+
+</script>
+
+<h1>Keycard generator</h1>
+
+<h2>Enter the keycard key</h2>
+
+<input type="text" id="key" size="35"></input>
+<button id="genKey" onClick="genKey()">Generate random key</button>
+<button id="genKeycard" onClick="genKeycard()">Generate keycard</button>
+
+<h2>Keycard</h2>
+
+<div id="keycardData"></div>
+
+
+</body>
+</html>
+
