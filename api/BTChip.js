@@ -58,6 +58,9 @@ var BTChip = Class.create({
 	},
 
 	parseBIP32Path : function(path) {
+        if (path.indexOf("m/") == 0) {
+                path = path.substring(2);
+        }
         var result = [];
         var components = path.split("/");
         for (var i=0; i<components.length; i++) {
