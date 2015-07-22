@@ -347,13 +347,18 @@ var BTChip = Class.create({
 	getTrustedInput_async: function(indexLookup, transaction) {
           var currentObject = this;
           var deferred = Q.defer();
-          var processScriptBlocks = function(script) {          	
+          var processScriptBlocks = function(script, sequence) {          	
           	  var internalPromise = Q.defer();
           	  var scriptBlocks = [];
           	  var offset = 0;
           	  while (offset != script.length) {
           	  	var blockSize = (script.length - offset > 251 ? 251 : script.length - offset);
-          	  	scriptBlocks.push(script.bytes(offset, blockSize));
+			if (offset != script.length) {
+          	  		scriptBlocks.push(script.bytes(offset, blockSize));
+			}
+			else {
+				scriptBlocks.push(script.bytes(offset, blockSize).concat(sequence));
+			}
           	  	offset += blockSize;
           	  }
           	  async.eachSeries(
@@ -378,7 +383,7 @@ var BTChip = Class.create({
                   // iteration (eachSeries) ended
                   // TODO notify progress
                   // deferred.notify("input");
-                  processScriptBlocks(input['script'].concat(input['sequence'])).then(function (result) {  	
+                  processScriptBlocks(input['script'], input['sequence']).then(function (result) {  	
                 		finishedCallback();
                 	}).fail(function(err) { deferred.reject(err); });
                 }).fail(function (err) { deferred.reject(err); });
