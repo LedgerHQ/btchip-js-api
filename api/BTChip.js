@@ -353,7 +353,7 @@ var BTChip = Class.create({
           	  var offset = 0;
           	  while (offset != script.length) {
           	  	var blockSize = (script.length - offset > 251 ? 251 : script.length - offset);
-			if (offset != script.length) {
+			if ((offset + blockSize) != script.length) {
           	  		scriptBlocks.push(script.bytes(offset, blockSize));
 			}
 			else {
